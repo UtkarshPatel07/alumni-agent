@@ -9,7 +9,10 @@
   <div class="eyebrow">Alumni network</div>
   <h1 style="font-size:34px;margin:16px 0 6px" id="title">Join your alumni network</h1>
   <p class="sub" style="margin:0 0 20px;font-size:15px" id="sub">Students are looking for people like you. You decide what's shared.</p>
+  <div id="liBox" style="display:none;margin:0 0 18px"><a id="liBtn" class="libtn" href="#"><span>in</span> Sign in with LinkedIn: auto-fill &amp; verify</a><div class="muted" style="font-size:12px;margin-top:6px">We only receive your name, email and photo. Nothing is posted.</div></div>
+  <div id="liOk"></div>
   <form id="f" class="form">
+    <label id="colWrap" style="display:none">College<input name="college"></label>
     <div class="two"><label>Full name<input name="name" required></label><label>Batch (graduation year)<input name="batch" type="number" min="2000" max="2030" placeholder="2023"></label></div>
     <div class="two"><label>Company<input name="company" placeholder="Google"></label><label>Role<input name="title" placeholder="Software Engineer"></label></div>
     <label>Location<input name="location" placeholder="Bengaluru, India"></label>
@@ -22,6 +25,11 @@
 <script>
 const t = new URLSearchParams(location.search).get('t'); const f = document.getElementById('f'), msg = document.getElementById('msg');
 const show = (c, m) => msg.innerHTML = `<div class="msg ${c}">${m}</div>`;
+const P = new URLSearchParams(location.search), college = P.get('c');
+if (!t) { document.getElementById('colWrap').style.display = ''; if (college) f.college.value = college; }
+if (P.get('li') === '1') document.getElementById('liOk').innerHTML = '<div class="msg ok">✓ Verified with LinkedIn. Your name and email were filled in. Please confirm your batch and company below.</div>';
+if (P.get('li') === 'err') show('err', 'LinkedIn sign-in failed or was cancelled. You can still fill the form manually.');
+fetch('/api/config').then((r) => r.json()).then((c) => { if (c.linkedinLogin && P.get('li') !== '1') { document.getElementById('liBox').style.display = ''; document.getElementById('liBtn').href = '/auth/linkedin?' + new URLSearchParams(t ? { t } : { c: college || '' }); } });
 if (t) fetch('/api/join/' + t).then((r) => r.ok ? r.json() : Promise.reject()).then((a) => {
   document.getElementById('title').textContent = `Welcome, ${a.name.split(' ')[0]}!`;
   document.getElementById('sub').textContent = `We found you at ${a.company || 'your company'}. Confirm your details so students can reach you.`;

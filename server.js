@@ -4,7 +4,8 @@ import { db, upsertAlumni, logEvent, applyRegister, normName } from './lib/db.js
 import { parseQuery } from './lib/parser.js';
 import { discover, findSchool } from './lib/sources.js';
 import { geocode } from './lib/geo.js';
-import { autoInvite } from './lib/mailer.js';
+import { prepareInvite, markSent, aiNote, inviteMessage, joinLink, smtpReady, BASE } from './lib/mailer.js';
+import crypto from 'node:crypto';
 import { enrichEmail } from './lib/enrich.js';
 
 if (fs.existsSync('.env')) for (const l of fs.readFileSync('.env', 'utf8').split(/\r?\n/)) {
@@ -115,13 +116,9 @@ app.get('/api/search', async (req, res) => {
 
 
     const rows = lakeQuery(intent, found);
-    let invites = 0;
-    for (const r of rows) if (!r.invited_at && r.status !== 'joined' && r.source !== 'sample') { const out = await autoInvite(r); if (out) invites++; }
-    // Sample records get invites recorded too so the whole loop is demonstrable, but nothing is emailed.
-    for (const r of rows.filter((x) => x.source === 'sample' && !x.invited_at)) {
-      db.prepare("UPDATE alumni SET invite_token=hex(randomblob(12)), invited_at=?, status='invited' WHERE id=?").run(new Date().toISOString(), r.id);
-    }
-    step(`Auto-invite agent: ${invites} invitation(s) queued/sent`, 'ok');
+    let drafted = 0, emailed = 0;
+    for (const r of rows) { const out = await prepareInvite(r); if (out) { drafted++; if (out.status.startsWith('sent')) emailed++; } }
+    step(`Invite agent: ${drafted} personalised invite(s) drafted${emailed ? `, ${emailed} emailed` : ''}. LinkedIn invites: use the "Invite on LinkedIn" button on each card (one click, sent by you)`, 'ok');
 
     db.prepare('INSERT INTO searches(query,parsed,found,created_at) VALUES (?,?,?,?)').run(q, JSON.stringify(intent), rows.length, new Date().toISOString());
     const final = db.prepare('SELECT * FROM alumni WHERE id IN (' + (rows.map(() => '?').join(',') || "''") + ')').all(...rows.map((r) => r.id)).map(pub);
@@ -169,12 +166,53 @@ function parseCsv(text) {
   return head ? body.map((l) => Object.fromEntries(head.map((h, i) => [h.trim(), l[i] ?? '']))) : [];
 }
 
+// ---------------- Invites ----------------
+const byId = (id) => db.prepare('SELECT * FROM alumni WHERE id=?').get(id);
+app.post('/api/invite/:id', async (req, res) => {
+  const a = byId(req.params.id); if (!a) return res.status(404).json({ error: 'not found' });
+  const link = joinLink(a), m = inviteMessage(a, link);
+  res.json({ note: await aiNote(a, link), link, linkedin: a.linkedin, email: a.email, subject: m.subject, body: m.body });
+});
+app.post('/api/invite/:id/sent', (req, res) => {
+  const a = byId(req.params.id); if (!a) return res.status(404).json({ error: 'not found' });
+  markSent(a, String(req.body?.channel || 'LinkedIn').slice(0, 30)); res.json({ ok: true });
+});
+app.get('/api/config', (_req, res) => {
+  const last = db.prepare('SELECT parsed FROM searches ORDER BY id DESC LIMIT 1').get();
+  res.json({ linkedinLogin: !!(process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET), smtp: smtpReady(), base: BASE(), lastCollege: last ? JSON.parse(last.parsed).college : null });
+});
+
+// ---------------- Sign in with LinkedIn (official OpenID Connect: name + verified email + photo of the person who logs in) ----------------
+const oauthStates = new Map();
+app.get('/auth/linkedin', (req, res) => {
+  if (!process.env.LINKEDIN_CLIENT_ID) return res.redirect('/join.html?li=off');
+  const state = crypto.randomBytes(16).toString('hex');
+  oauthStates.set(state, { t: req.query.t || null, c: req.query.c || null, at: Date.now() });
+  const q = new URLSearchParams({ response_type: 'code', client_id: process.env.LINKEDIN_CLIENT_ID, redirect_uri: `${BASE()}/auth/linkedin/callback`, state, scope: 'openid profile email' });
+  res.redirect(`https://www.linkedin.com/oauth/v2/authorization?${q}`);
+});
+app.get('/auth/linkedin/callback', async (req, res) => {
+  const st = oauthStates.get(req.query.state); oauthStates.delete(req.query.state);
+  if (!st || !req.query.code) return res.redirect('/join.html?li=err');
+  try {
+    const tok = await fetch('https://www.linkedin.com/oauth/v2/accessToken', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'authorization_code', code: req.query.code, redirect_uri: `${BASE()}/auth/linkedin/callback`, client_id: process.env.LINKEDIN_CLIENT_ID, client_secret: process.env.LINKEDIN_CLIENT_SECRET }) }).then((r) => r.json());
+    if (!tok.access_token) throw new Error(tok.error_description || 'no token');
+    const u = await fetch('https://api.linkedin.com/v2/userinfo', { headers: { authorization: `Bearer ${tok.access_token}` } }).then((r) => r.json());
+    let a = st.t ? db.prepare('SELECT * FROM alumni WHERE invite_token=?').get(st.t) : null;
+    if (!a) { const { id } = upsertAlumni({ name: u.name, college: st.c || 'Unknown', email: u.email || null, source: 'self' }); a = byId(id); }
+    db.prepare('UPDATE alumni SET email=COALESCE(?,email), li_verified=1 WHERE id=?').run(u.email_verified === false ? null : (u.email || null), a.id);
+    logEvent('linkedin_verified', a.id, { email: !!u.email });
+    res.redirect(`/join.html?t=${joinLink(a).split('t=')[1]}&li=1`);
+  } catch (e) { console.error('LinkedIn login failed:', e.message); res.redirect('/join.html?li=err'); }
+});
+
 app.get('/api/lake', (_req, res) => {
   const total = (sql) => db.prepare(sql).get().n;
   res.json({
     stats: {
       alumni: total('SELECT COUNT(*) n FROM alumni'), invited: total("SELECT COUNT(*) n FROM alumni WHERE status='invited'"),
-      joined: total("SELECT COUNT(*) n FROM alumni WHERE status='joined'"), searches: total('SELECT COUNT(*) n FROM searches'),
+      joined: total("SELECT COUNT(*) n FROM alumni WHERE status='joined'"), drafted: total("SELECT COUNT(*) n FROM outbox WHERE status LIKE 'draft%'"), searches: total('SELECT COUNT(*) n FROM searches'),
       withEmail: total('SELECT COUNT(*) n FROM alumni WHERE email IS NOT NULL'),
       register: total('SELECT COUNT(*) n FROM register'), batchConfirmed: total("SELECT COUNT(*) n FROM alumni WHERE batch_source='register' OR verified=1"),
     },
@@ -187,7 +225,7 @@ app.get('/api/lake', (_req, res) => {
 });
 
 app.get('/api/join/:token', (req, res) => {
-  const a = db.prepare('SELECT name,company,title,location,batch,college,email,linkedin,status FROM alumni WHERE invite_token=?').get(req.params.token);
+  const a = db.prepare('SELECT name,company,title,location,batch,college,email,linkedin,status,li_verified FROM alumni WHERE invite_token=?').get(req.params.token);
   a ? res.json(a) : res.status(404).json({ error: 'Invalid or expired invite' });
 });
 
@@ -211,7 +249,7 @@ app.post('/api/signup', async (req, res) => {
   const b = req.body || {};
   if (!b.name || !b.consent) return res.status(400).json({ error: 'Name and consent required' });
   const g = b.location ? await geocode(b.location) : null;
-  const rec = { name: b.name, company: b.company, title: b.title, location: b.location, batch: +b.batch || null, college: 'Universal AI University',
+  const rec = { name: b.name, company: b.company, title: b.title, location: b.location, batch: +b.batch || null, college: String(b.college || 'Unknown').slice(0, 120),
     email: b.email, linkedin: b.linkedin || null, source: 'self', ...(g || {}) };
   const { id } = upsertAlumni(rec);
   db.prepare("UPDATE alumni SET verified=1,status='joined',joined_at=? WHERE id=?").run(new Date().toISOString(), id);

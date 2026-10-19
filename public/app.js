@@ -6,7 +6,7 @@ let map, layer, lastResults = [], lastIntent = {}, currentES = null, fYear = 'al
 document.querySelectorAll('.tab[data-tab]').forEach((b) => b.onclick = () => {
   document.querySelectorAll('.tab[data-tab]').forEach((x) => x.classList.toggle('active', x === b));
   document.querySelectorAll('.view').forEach((v) => v.classList.toggle('active', v.id === b.dataset.tab));
-  if (b.dataset.tab === 'lake') loadLake(); else map?.invalidateSize();
+  if (b.dataset.tab === 'lake') { loadLake(); loadCampaign(); } else map?.invalidateSize();
 });
 
 // Voice input (Web Speech API)
@@ -37,8 +37,10 @@ function card(a) {
     <div class="tags">${a.batch ? `<span class="tag p">Batch ${a.batch}${a.batch_source === 'register' ? ' \u2713 college register' : a.verified ? ' \u2713 self-confirmed' : a.batch_source === 'news' ? ' \u2713 placement news' : ' \u00b7 from profile'}</span>` : '<span class="tag y">Batch unverified</span>'}
     ${a.email && !a.verified ? '<span class="tag y" title="Found on a public page; not confirmed by the alumnus">Email unverified</span>' : ''}
     ${a.verified ? '<span class="tag g">✓ Verified by alumnus</span>' : ''}
-    ${a.status === 'joined' ? '<span class="tag g">Joined</span>' : a.status === 'invited' ? '<span class="tag">Invited</span>' : ''}
-    ${srcTags(a)}</div></div>`;
+    ${a.status === 'joined' ? '<span class="tag g">✓ Joined</span>' : a.status === 'invited' ? '<span class="tag p">Invite sent</span>' : '<span class="tag">Not invited yet</span>'}
+    ${a.li_verified ? '<span class="tag g">✓ LinkedIn verified</span>' : ''}
+    ${srcTags(a)}</div>
+    ${a.status !== 'joined' && a.id ? `<div class="invrow">${a.linkedin ? `<button class="inv li" data-id="${a.id}" data-ch="LinkedIn">Invite on LinkedIn</button>` : ''}${a.email ? `<button class="inv em" data-id="${a.id}" data-ch="email">Email invite</button>` : ''}</div>` : ''}</div>`;
 }
 
 function filtersBar(list) {
@@ -121,16 +123,55 @@ async function refreshBadge() { try { $('#lakeBadge').textContent = (await (awai
 async function loadLake() {
   const d = await (await fetch('/api/lake')).json();
   $('#lakeBadge').textContent = d.stats.alumni;
-  $('#lakeStats').innerHTML = [['alumni', 'Records'], ['invited', 'Invited'], ['joined', 'Joined'], ['withEmail', 'With email'], ['searches', 'Searches']]
+  $('#lakeStats').innerHTML = [['alumni', 'Alumni records'], ['drafted', 'Invites drafted'], ['invited', 'Invites sent'], ['joined', 'Joined (verified)'], ['withEmail', 'With email']]
     .map(([k, l]) => `<div class="stat"><b>${d.stats[k]}</b><span>${l}</span></div>`).join('');
   const bars = (arr) => { const m = Math.max(1, ...arr.map((x) => x.n)); return arr.map((x) => `<div class="row"><span>${esc(x.label ?? '—')}</span><div class="bar" style="width:${(x.n / m) * 100}%"></div><b>${x.n}</b></div>`).join('') || '<span class="muted">Empty – run a search</span>'; };
   $('#byCompany').innerHTML = bars(d.byCompany); $('#byBatch').innerHTML = bars(d.byBatch);
   $('#events').innerHTML = d.events.map((e) => `<li><b>${esc(e.type)}</b> · ${esc(e.name || '')} <span class="muted">${new Date(e.created_at).toLocaleTimeString()}</span></li>`).join('') || '<li class="muted">No events</li>';
   $('#table').innerHTML = '<tr><th>Name</th><th>Company</th><th>Title</th><th>Location</th><th>Batch</th><th>Email</th><th>LinkedIn</th><th>Status</th><th>Seen</th></tr>' +
     d.alumni.map((a) => `<tr><td>${esc(a.name)}</td><td>${esc(a.company)}</td><td>${esc(a.title)}</td><td>${esc(a.location)}</td><td>${a.batch ?? ''}</td><td>${esc(a.email)}</td><td>${a.linkedin ? `<a href="${esc(a.linkedin)}" target="_blank">profile</a>` : ''}</td><td>${esc(a.status)}${a.verified ? ' ✓' : ''}</td><td>${a.seen_count}×</td></tr>`).join('');
-  $('#outbox').innerHTML = d.outbox.map((o) => `<details style="margin:8px 0"><summary><b>${esc(o.name)}</b> → ${esc(o.to_addr || 'LinkedIn outreach')} <span class="tag">${esc(o.status)}</span></summary><pre style="white-space:pre-wrap;color:var(--mut)">${esc(o.subject)}\n\n${esc(o.body)}</pre></details>`).join('') || '<span class="muted">No invites yet</span>';
+  $('#outbox').innerHTML = d.outbox.map((o) => `<details style="margin:8px 0"><summary><b>${esc(o.name)}</b> → ${esc(o.to_addr || 'LinkedIn')} <span class="tag ${/^sent/.test(o.status) ? 'g' : /^fail/.test(o.status) ? 'y' : ''}">${esc(o.status)}</span> ${/^draft · LinkedIn/.test(o.status) ? `<button class="inv li sm" data-id="${o.alumni_id}" data-ch="LinkedIn">Send on LinkedIn</button>` : ''}</summary><pre style="white-space:pre-wrap;color:var(--mut)">${esc(o.subject)}\n\n${esc(o.body)}</pre></details>`).join('') || '<span class="muted">No invites yet</span>';
 }
 refreshBadge();
+
+// ---------------- Invites: one click, sent by a human (LinkedIn does not allow apps to auto-message) ----------------
+function toast(html, ms = 9000) {
+  let t = $('#toast'); if (!t) { t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }
+  t.innerHTML = html; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), ms);
+}
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('.inv'); if (!b) return;
+  e.preventDefault(); b.disabled = true; const label = b.textContent; b.textContent = 'Preparing…';
+  try {
+    const d = await (await fetch('/api/invite/' + b.dataset.id, { method: 'POST' })).json();
+    if (b.dataset.ch === 'LinkedIn') {
+      await navigator.clipboard.writeText(d.note).catch(() => {});
+      window.open(d.linkedin, '_blank', 'noopener');
+      toast(`<b>Invite note copied ✓</b><br>On their LinkedIn profile: <b>Connect → Add a note → Ctrl+V → Send</b>.<pre>${esc(d.note)}</pre>`);
+    } else {
+      location.href = `mailto:${encodeURIComponent(d.email)}?subject=${encodeURIComponent(d.subject)}&body=${encodeURIComponent(d.body)}`;
+      toast('<b>Email draft opened</b> with their personal join link. Press Send in your mail app.');
+    }
+    await fetch('/api/invite/' + b.dataset.id + '/sent', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ channel: b.dataset.ch }) });
+    b.textContent = 'Invite sent ✓'; b.classList.add('done');
+    const tag = b.closest('.person')?.querySelector('.tags .tag:not(.p):not(.g):not(.y)'); if (tag && /Not invited/.test(tag.textContent)) { tag.textContent = 'Invite sent'; tag.classList.add('p'); }
+  } catch { b.textContent = label; b.disabled = false; toast('Could not prepare the invite. Try again.'); }
+});
+
+// ---------------- Campaign: invite many alumni at once via a shareable post ----------------
+async function loadCampaign() {
+  const c = await (await fetch('/api/config')).json();
+  const college = $('#campCollege').value.trim() || c.lastCollege || '';
+  if (!$('#campCollege').value && college) $('#campCollege').value = college;
+  const link = `${c.base}/join.html?c=${encodeURIComponent(college)}`;
+  const text = `Calling all ${college} alumni! Students are building our alumni network so juniors can learn from your journey. Join in 30 seconds: ${link}`;
+  $('#campLink').textContent = link;
+  $('#campLi').href = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(link)}`;
+  $('#campWa').href = `https://wa.me/?text=${encodeURIComponent(text)}`;
+  $('#campCopy').onclick = () => { navigator.clipboard.writeText(text); toast('<b>Post text + link copied ✓</b> Paste it in alumni WhatsApp groups, LinkedIn or email.'); };
+  $('#campStatus').innerHTML = `Email auto-send: <b>${c.smtp ? 'ON' : 'OFF (add SMTP in .env)'}</b> · Sign in with LinkedIn on join page: <b>${c.linkedinLogin ? 'ON' : 'OFF (add LINKEDIN_CLIENT_ID/SECRET)'}</b>`;
+}
+$('#campCollege').onchange = loadCampaign;
 
 $('#regBtn').onclick = async () => {
   const college = $('#regCollege').value.trim(), f = $('#regFile').files[0];
