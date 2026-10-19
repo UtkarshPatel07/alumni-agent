@@ -109,7 +109,7 @@ app.get('/api/search', async (req, res) => {
       db.prepare('UPDATE alumni SET evidence=COALESCE(?,evidence), batch_source=COALESCE(batch_source,?) WHERE id=?').run(a.evidence || null, a.batch_source || null, id);
       if (isNew) created++;
     }
-    step(`Data lake updated: +${created} new, ${items.length - created} refreshed`, 'ok');
+    step(`Data lake: +${created} new alumni saved, ${items.length - created} existing refreshed (0 duplicates created)`, 'ok');
     const confirmed = applyRegister(intent.college);
     if (confirmed) step(`College register: ${confirmed} record(s) batch-confirmed from the official alumni list`, 'ok');
     await schoolP;
