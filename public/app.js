@@ -132,7 +132,16 @@ async function loadLake() {
     .map(([k, l]) => `<div class="stat"><b>${d.stats[k]}</b><span>${l}</span></div>`).join('');
   const bars = (arr) => { const m = Math.max(1, ...arr.map((x) => x.n)); return arr.map((x) => `<div class="row"><span>${esc(x.label ?? '—')}</span><div class="bar" style="width:${(x.n / m) * 100}%"></div><b>${x.n}</b></div>`).join('') || '<span class="muted">Empty – run a search</span>'; };
   $('#byCompany').innerHTML = bars(d.byCompany); $('#byBatch').innerHTML = bars(d.byBatch);
-  $('#events').innerHTML = d.events.map((e) => `<li><b>${esc(e.type)}</b> · ${esc(e.name || '')} <span class="muted">${new Date(e.created_at).toLocaleTimeString()}</span></li>`).join('') || '<li class="muted">No events</li>';
+  const formatEvent = (e) => {
+    let tag = `<span class="tag">${esc(e.type)}</span>`;
+    if (e.type === 'discovered') tag = '<span class="tag">discovered</span>';
+    else if (e.type === 'invite_drafted') tag = '<span class="tag y">drafted</span>';
+    else if (e.type === 'invite_sent') tag = '<span class="tag g">invite sent</span>';
+    else if (e.type === 'email_found') tag = '<span class="tag g">email found</span>';
+    else if (e.type === 'joined') tag = '<span class="tag g">joined ✓</span>';
+    return `<li>${tag} · <b>${esc(e.name || '')}</b> <span class="muted">${new Date(e.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span></li>`;
+  };
+  $('#events').innerHTML = d.events.map(formatEvent).join('') || '<li class="muted">No events</li>';
   $('#table').innerHTML = '<tr><th>Name</th><th>Company</th><th>Title</th><th>Location</th><th>Batch</th><th>Email</th><th>LinkedIn</th><th>Status</th><th>Seen</th></tr>' +
     d.alumni.map((a) => `<tr><td>${esc(a.name)}</td><td>${esc(a.company)}</td><td>${esc(a.title)}</td><td>${esc(a.location)}</td><td>${a.batch ?? ''}</td><td>${esc(a.email)}</td><td>${a.linkedin ? `<a href="${esc(a.linkedin)}" target="_blank">profile</a>` : ''}</td><td>${esc(a.status)}${a.verified ? ' ✓' : ''}</td><td>${a.seen_count}×</td></tr>`).join('');
   $('#outbox').innerHTML = d.outbox.map((o) => `<details style="margin:8px 0"><summary><b>${esc(o.name)}</b> → ${esc(o.to_addr || 'LinkedIn')} <span class="tag ${/^sent/.test(o.status) ? 'g' : /^fail/.test(o.status) ? 'y' : ''}">${esc(o.status)}</span> ${/^draft · LinkedIn/.test(o.status) ? `<button class="inv li sm" data-id="${o.alumni_id}" data-ch="LinkedIn">Send on LinkedIn</button>` : ''}</summary><pre style="white-space:pre-wrap;color:var(--mut)">${esc(o.subject)}\n\n${esc(o.body)}</pre></details>`).join('') || '<span class="muted">No invites yet</span>';
