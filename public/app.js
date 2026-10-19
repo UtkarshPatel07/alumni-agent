@@ -207,13 +207,16 @@ $('#form').onsubmit = (e) => {
   const params = new URLSearchParams({ q });
   const code = new URLSearchParams(location.search).get('code'); if (code) params.set('code', code);
   if (from) params.set('from', from); if (to) params.set('to', to); if (cos) params.set('companies', cos); if (deep) params.set('deep', '1');
-  $('#workspace').classList.remove('hidden'); $('#steps').innerHTML = ''; $('#go').disabled = true; $('#go').textContent = 'Agent working…';
+  $('#workspace').classList.remove('hidden');
+  $('#steps').innerHTML = '<li class="run" id="init-step"><i></i><span>Connecting to autonomous agent…</span></li>';
+  $('#go').disabled = true; $('#go').textContent = 'Agent working…';
   $('#workspace').scrollIntoView({ behavior: 'smooth' });
   if (currentES) currentES.close(); // never mix two searches
   $('#results').innerHTML = ''; $('#statrow').innerHTML = ''; $('#verifyBar').innerHTML = ''; $('#resTitle').textContent = 'Searching…'; layer?.clearLayers();
   const es = currentES = new EventSource('/api/search?' + params.toString());
   const byId = {};
   es.addEventListener('step', (ev) => {
+    const init = $('#init-step'); if (init) init.remove();
     const s = JSON.parse(ev.data);
     let li = s.id && byId[s.id];
     if (!li) { li = document.createElement('li'); $('#steps').appendChild(li); if (s.id) byId[s.id] = li; }
@@ -227,7 +230,18 @@ $('#form').onsubmit = (e) => {
     $('#verifyBar').innerHTML = `<div class="verify"><span>🎓 <b>Confirm batch years</b> on LinkedIn's official ${esc(s.college)} alumni tool (filters by graduation year; opens in your logged-in LinkedIn):</span>${s.links.map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.company || 'All alumni')} →</a>`).join('')}</div>`;
   });
   es.addEventListener('done', () => { es.close(); $('#go').disabled = false; $('#go').textContent = 'Run agent →'; refreshBadge(); });
-  es.onerror = () => { es.close(); $('#go').disabled = false; $('#go').textContent = 'Run agent →'; };
+  es.onerror = (err) => {
+    console.warn('EventSource error:', err);
+    es.close();
+    $('#go').disabled = false;
+    $('#go').textContent = 'Run agent →';
+    if (!$('#steps li')) {
+      const li = document.createElement('li');
+      li.className = 'warn';
+      li.innerHTML = '<i>!</i><span>Search connection interrupted. Please try again or check your query.</span>';
+      $('#steps').appendChild(li);
+    }
+  };
 };
 
 $('#csv').onclick = () => {

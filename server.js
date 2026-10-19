@@ -28,7 +28,7 @@ function lakeQuery(intent, found = new Set()) {
 }
 
 // Public deployment guard: per-visitor and per-day search limits protect the Serper/Gemini credits.
-const LIMIT_IP_HOUR = +(process.env.MAX_SEARCHES_PER_IP_HOUR || 8), LIMIT_DAY = +(process.env.MAX_SEARCHES_PER_DAY || 40);
+const LIMIT_IP_HOUR = +(process.env.MAX_SEARCHES_PER_IP_HOUR || 60), LIMIT_DAY = +(process.env.MAX_SEARCHES_PER_DAY || 500);
 const hits = new Map(); let day = new Date().toDateString(), dayCount = 0;
 function allowSearch(req, deep) {
   const today = new Date().toDateString(); if (today !== day) { day = today; dayCount = 0; hits.clear(); }
@@ -43,19 +43,32 @@ function allowSearch(req, deep) {
 /** The agent run, streamed as Server-Sent Events so the UI can show every step live. */
 app.get('/api/search', async (req, res) => {
   const q = String(req.query.q || '').trim();
+  console.log(`[Search] New query: "${q}"`);
   if (!q) return res.status(400).json({ error: 'q required' });
+  
+  // Anti-buffering headers for Cloudflare / Nginx proxies
+  res.set({
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no'
+  });
+  res.flushHeaders();
+  // Send 2KB initial comment padding to force Cloudflare proxy to immediately flush the SSE stream
+  res.write(`: ${' '.repeat(2048)}\n\n`);
+
+  const send = (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  const step = (text, level = 'info', id) => send('step', { text, level, id, t: Date.now() });
+
   if (process.env.ACCESS_CODE && req.query.code !== process.env.ACCESS_CODE) {
-    res.set({ 'content-type': 'text/event-stream' }).flushHeaders();
-    res.write(`event: step\ndata: ${JSON.stringify({ text: 'This demo needs an access code. Add ?code=YOUR_CODE to the page address.', level: 'warn' })}\n\nevent: done\ndata: {}\n\n`); return res.end();
+    step('This demo needs an access code. Add ?code=YOUR_CODE to the page address.', 'warn');
+    send('done', {}); return res.end();
   }
   const blocked = allowSearch(req, req.query.deep === '1');
   if (blocked) {
-    res.set({ 'content-type': 'text/event-stream' }).flushHeaders();
-    res.write(`event: step\ndata: ${JSON.stringify({ text: blocked, level: 'warn' })}\n\nevent: done\ndata: {}\n\n`); return res.end();
+    step(blocked, 'warn');
+    send('done', {}); return res.end();
   }
-  res.set({ 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' }).flushHeaders();
-  const send = (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-  const step = (text, level = 'info', id) => send('step', { text, level, id, t: Date.now() });
   try {
     step('Understanding your request…', 'run', 'parse');
     const intent = await parseQuery(q);
