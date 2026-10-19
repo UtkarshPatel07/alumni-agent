@@ -1,6 +1,7 @@
 node_modules
 .env
-data
+data/*
+!data/seed.json
 *.log
 *.err
 s.txt
