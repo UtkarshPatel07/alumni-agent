@@ -175,7 +175,21 @@ function render(all, keepFilters) {
   const cos = new Set(list.map((a) => a.company)), loc = list.filter((a) => a.lat).length;
   $('#statrow').innerHTML = [[list.length, 'Alumni'], [cos.size, 'Companies'], [list.filter((a) => a.email).length, 'With email'], [list.filter((a) => a.batch).length, 'Batch known'], [list.filter((a) => a.linkedin).length, 'LinkedIn'], [loc, 'Mapped']]
     .map(([n, l]) => `<div class="stat"><b>${n}</b><span>${l}</span></div>`).join('');
-  $('#results').innerHTML = filtersBar(all) + (list.length ? sure.map(card).join('') + (maybe.length ? '<div class="divider">Possible matches \u2014 batch not stated on their public profile, so it could not be verified</div>' + maybe.map(card).join('') : '') : '<div class="empty">No alumni match these filters. Try another batch year, or widen the search.</div>');
+  const emptyState = all.length === 0
+    ? `<div class="empty" style="padding:28px 16px;text-align:center;">
+        <div style="font-size:32px;margin-bottom:8px">🔍</div>
+        <h4 style="margin:0 0 6px 0;font-size:16px;">No alumni found for this specific search</h4>
+        <p class="muted" style="margin:0 auto 14px auto;max-width:500px;font-size:13px;line-height:1.5;">
+          ${lastIntent.college ? `Searched public sources for <b>${esc(lastIntent.college)}</b>.` : ''} If searching a new college, live Google search credits may be exhausted.<br>
+          <b style="color:var(--text)">✓ Your Data Lake remains completely safe and intact.</b>
+        </p>
+        <button type="button" class="btn sm" onclick="document.querySelector('.tab[data-tab=\\'lake\\']')?.click()" style="display:inline-flex;align-items:center;gap:6px;">
+          📁 Open Data Lake (View all saved alumni) →
+        </button>
+      </div>`
+    : '<div class="empty">No alumni match these filters. Try another batch year, or widen the search.</div>';
+
+  $('#results').innerHTML = (all.length ? filtersBar(all) : '') + (list.length ? sure.map(card).join('') + (maybe.length ? '<div class="divider">Possible matches — batch not stated on their public profile, so it could not be verified</div>' + maybe.map(card).join('') : '') : emptyState);
   wireFilters();
   if (!map) { map = L.map('map', { scrollWheelZoom: false }).setView([20, 40], 2);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '\u00a9 OpenStreetMap contributors', maxZoom: 19 }).addTo(map); }
@@ -220,7 +234,7 @@ $('#form').onsubmit = (e) => {
     const s = JSON.parse(ev.data);
     $('#verifyBar').innerHTML = `<div class="verify"><span>🎓 <b>Confirm batch years</b> on LinkedIn's official ${esc(s.college)} alumni tool (filters by graduation year; opens in your logged-in LinkedIn):</span>${s.links.map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.company || 'All alumni')} →</a>`).join('')}</div>`;
   });
-  es.addEventListener('done', () => { es.close(); $('#go').disabled = false; $('#go').textContent = 'Run agent →'; refreshBadge(); });
+  es.addEventListener('done', () => { es.close(); $('#go').disabled = false; $('#go').textContent = 'Run agent →'; refreshBadge(); loadColleges(); });
   es.onerror = (err) => {
     console.warn('EventSource error:', err);
     es.close();
@@ -266,6 +280,7 @@ async function loadLake() {
   $('#outbox').innerHTML = d.outbox.map((o) => `<details style="margin:8px 0"><summary><b>${esc(o.name)}</b> → ${esc(o.to_addr || 'LinkedIn')} <span class="tag ${/^sent/.test(o.status) ? 'g' : /^fail/.test(o.status) ? 'y' : ''}">${esc(o.status)}</span> ${/^draft · LinkedIn/.test(o.status) ? `<button class="inv li sm" data-id="${o.alumni_id}" data-ch="LinkedIn">Send on LinkedIn</button>` : ''}</summary><pre style="white-space:pre-wrap;color:var(--mut)">${esc(o.subject)}\n\n${esc(o.body)}</pre></details>`).join('') || '<span class="muted">No invites yet</span>';
 }
 refreshBadge();
+loadColleges();
 
 // ---------------- Invites: one click, sent by a human (LinkedIn does not allow apps to auto-message) ----------------
 function toast(html, ms = 9000) {

@@ -221,6 +221,7 @@ app.get('/auth/linkedin/callback', async (req, res) => {
 });
 
 app.get('/api/lake', (_req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   const total = (sql) => db.prepare(sql).get().n;
   res.json({
     stats: {
@@ -272,6 +273,7 @@ app.post('/api/signup', async (req, res) => {
 
 /** Colleges in the data lake (for the download picker) */
 app.get('/api/colleges', (_req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   res.json(db.prepare("SELECT college, COUNT(*) n, SUM(batch IS NOT NULL) withBatch FROM alumni WHERE college IS NOT NULL AND source != 'sample' GROUP BY lower(college) ORDER BY n DESC").all());
 });
 
