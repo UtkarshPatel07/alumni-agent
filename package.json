@@ -1,0 +1,21 @@
+{
+  "name": "alumni-agent",
+  "version": "1.0.0",
+  "description": "AI-native agentic alumni finder: voice/text search, multi-source discovery, AI verification, data lake, auto-invites",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node --disable-warning=ExperimentalWarning server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.3.0",
+    "nodemailer": "^10.1.2"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  }
+}

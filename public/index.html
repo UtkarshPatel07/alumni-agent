@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AlumniAgent · Find your college's alumni with AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="styles.css?v=10">
+</head>
+<body>
+<div class="bg"></div>
+<header class="nav">
+  <div class="logo"><span class="dot"></span>Alumni<b>Agent</b></div>
+  <nav>
+    <button class="tab active" data-tab="search">Find alumni</button>
+    <button class="tab" data-tab="lake">Data lake <span id="lakeBadge" class="pill">0</span></button>
+    <a class="tab" href="join.html">I'm an alumnus</a>
+  </nav>
+</header>
+
+<main>
+<section id="search" class="view active">
+  <div class="hero">
+    <div class="eyebrow">AI-native · Agentic · Live data</div>
+    <h1>Find any alumni.<br><span class="grad">Just ask.</span></h1>
+    <p class="sub">Type or speak. An autonomous agent discovers alumni, maps them, and invites them to join — filling your data lake every time you search.</p>
+    <form id="form" class="searchbar">
+      <textarea id="q" rows="2" placeholder="e.g. Find alumni of Galgotias University from 2020 to 2026 who work at Microsoft or Google. Share location, email or LinkedIn."></textarea>
+      <div class="actions">
+        <button type="button" id="mic" class="icon" title="Speak your query" aria-label="Voice input">🎙</button>
+        <button class="go" id="go">Run agent →</button>
+      </div>
+    </form>
+    <div class="adv">
+      <input id="fCollege" placeholder="College (optional)">
+      <input id="fFrom" type="number" min="1980" max="2035" placeholder="Batch from">
+      <input id="fTo" type="number" min="1980" max="2035" placeholder="Batch to">
+      <input id="fCos" placeholder="Companies, e.g. Google, Infosys (optional)">
+      <label class="deep" title="Runs ~150-200 searches instead of ~45: many more alumni for big universities (uses ~3-4x Serper credits)"><input type="checkbox" id="fDeep"> Deep search</label>
+    </div>
+  </div>
+
+  <div id="workspace" class="grid hidden">
+    <aside class="card trace">
+      <h3>Agent activity <span id="engine" class="pill"></span></h3>
+      <ol id="steps"></ol>
+    </aside>
+    <div class="right">
+      <div class="statrow" id="statrow"></div>
+      <div class="card"><div id="map"></div></div>
+      <div class="toolbar"><h3 id="resTitle">Results</h3>
+        <div><button class="ghost" id="csv">Export CSV</button></div></div>
+      <div id="verifyBar"></div>
+      <div id="results" class="cards"></div>
+    </div>
+  </div>
+</section>
+
+<section id="lake" class="view">
+  <div class="lakehead"><h2>Data lake</h2><p>Every search enriches this. Every alumnus who accepts an invite re-populates it with verified data.</p></div>
+  <div class="statrow" id="lakeStats"></div>
+  <div class="grid3">
+    <div class="card"><h3>By company</h3><div id="byCompany" class="bars"></div></div>
+    <div class="card"><h3>By batch</h3><div id="byBatch" class="bars"></div></div>
+    <div class="card"><h3>Live event stream</h3><ul id="events" class="events"></ul></div>
+  </div>
+  <div class="card tablecard" id="registerCard">
+    <h3>Official alumni register <span class="muted">— confirms batch years (college admin)</span></h3>
+    <p class="muted" style="margin:0 0 12px">Upload the college's own alumni list as CSV with columns <code>name, batch</code> (optional: <code>email, linkedin, program, company, location</code>). Every LinkedIn profile the agent finds is matched against it, and matches get a <b>confirmed</b> batch.</p>
+    <div class="regrow"><input id="regCollege" placeholder="College name exactly as you search it, e.g. Galgotias University"><input id="regFile" type="file" accept=".csv,text/csv"><button class="go" id="regBtn" type="button">Import</button></div>
+    <div id="regMsg"></div>
+  </div>
+  <div class="card tablecard"><h3>All records</h3><div class="scroll"><table id="table"></table></div></div>
+  <div class="card tablecard"><h3>Invite outbox <span class="muted">(auto-invite agent)</span></h3><div id="outbox"></div></div>
+</section>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="app.js?v=10"></script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: alumni-agent
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: 22.21.1
+      - key: SERPER_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.1-flash-lite
+      - key: BASE_URL
+        sync: false
+      - key: MAX_SEARCHES_PER_DAY
+        value: "40"
+      - key: MAX_SEARCHES_PER_IP_HOUR
+        value: "8"

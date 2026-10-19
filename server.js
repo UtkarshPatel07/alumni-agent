@@ -1,0 +1,230 @@
+import express from 'express';
+import fs from 'node:fs';
+import { db, upsertAlumni, logEvent, applyRegister, normName } from './lib/db.js';
+import { parseQuery } from './lib/parser.js';
+import { discover, findSchool } from './lib/sources.js';
+import { geocode } from './lib/geo.js';
+import { autoInvite } from './lib/mailer.js';
+import { enrichEmail } from './lib/enrich.js';
+
+if (fs.existsSync('.env')) for (const l of fs.readFileSync('.env', 'utf8').split(/\r?\n/)) {
+  const m = l.match(/^\s*([A-Z_]+)\s*=\s*(.*)\s*$/); if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
+}
+
+const app = express();
+app.use(express.json());
+app.use(express.static('public', { setHeaders: (res) => res.set('Cache-Control', 'no-cache') }));
+
+const pub = (r) => ({ ...r, invite_token: undefined, email: r.email, verified: !!r.verified });
+
+// Records found by THIS run always count; records only in the lake count only if they match the request exactly
+// (same college, a batch that is KNOWN and requested, and the requested company).
+function lakeQuery(intent, found = new Set()) {
+  const rows = db.prepare('SELECT * FROM alumni WHERE lower(college)=lower(?)').all(intent.college);
+  return rows.filter((r) => found.has(r.id) || (
+    (!intent.companies.length || intent.companies.some((c) => r.company?.toLowerCase().includes(c.toLowerCase())))
+    && (!intent.batches.length || (r.batch && intent.batches.includes(r.batch)))));
+}
+
+// Public deployment guard: per-visitor and per-day search limits protect the Serper/Gemini credits.
+const LIMIT_IP_HOUR = +(process.env.MAX_SEARCHES_PER_IP_HOUR || 8), LIMIT_DAY = +(process.env.MAX_SEARCHES_PER_DAY || 40);
+const hits = new Map(); let day = new Date().toDateString(), dayCount = 0;
+function allowSearch(req, deep) {
+  const today = new Date().toDateString(); if (today !== day) { day = today; dayCount = 0; hits.clear(); }
+  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+  const now = Date.now(), list = (hits.get(ip) || []).filter((t) => now - t < 3600e3);
+  const cost = deep ? 3 : 1;
+  if (list.length + cost > LIMIT_IP_HOUR) return 'Hourly search limit reached for this demo. Please try again later.';
+  if (dayCount + cost > LIMIT_DAY) return 'Daily search limit reached for this demo (protects the API credits). Please try again tomorrow.';
+  for (let i = 0; i < cost; i++) list.push(now); hits.set(ip, list); dayCount += cost; return null;
+}
+
+/** The agent run, streamed as Server-Sent Events so the UI can show every step live. */
+app.get('/api/search', async (req, res) => {
+  const q = String(req.query.q || '').trim();
+  if (!q) return res.status(400).json({ error: 'q required' });
+  if (process.env.ACCESS_CODE && req.query.code !== process.env.ACCESS_CODE) {
+    res.set({ 'content-type': 'text/event-stream' }).flushHeaders();
+    res.write(`event: step\ndata: ${JSON.stringify({ text: 'This demo needs an access code. Add ?code=YOUR_CODE to the page address.', level: 'warn' })}\n\nevent: done\ndata: {}\n\n`); return res.end();
+  }
+  const blocked = allowSearch(req, req.query.deep === '1');
+  if (blocked) {
+    res.set({ 'content-type': 'text/event-stream' }).flushHeaders();
+    res.write(`event: step\ndata: ${JSON.stringify({ text: blocked, level: 'warn' })}\n\nevent: done\ndata: {}\n\n`); return res.end();
+  }
+  res.set({ 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' }).flushHeaders();
+  const send = (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  const step = (text, level = 'info', id) => send('step', { text, level, id, t: Date.now() });
+  try {
+    step('Understanding your request…', 'run', 'parse');
+    const intent = await parseQuery(q);
+    if (intent.college && /universal\s*ai/i.test(intent.college)) intent.college = 'Universal AI University';
+    // Exact filters from the form override what the AI understood from the sentence
+    const fy = +req.query.from || null, ty = +req.query.to || null;
+    if (fy || ty) { const a = Math.min(fy || ty, ty || fy), b = Math.max(fy || ty, ty || fy); intent.batches = []; for (let y = a; y <= b; y++) intent.batches.push(y); }
+    if (req.query.companies) intent.companies = String(req.query.companies).split(',').map((s) => s.trim()).filter(Boolean);
+    intent.deep = req.query.deep === '1';
+    send('intent', intent);
+    if (!intent.college) {
+      step("I couldn't tell which college you mean. Please name it, e.g. 'alumni of Amity University, 2019 batch'.", 'warn');
+      send('results', []); send('done', {}); return res.end();
+    }
+    step(`Parsed with ${intent.engine}: ${intent.college} · batches ${intent.batches[0] ?? '–'}–${intent.batches.at(-1) ?? '–'} · ${intent.companies.join(', ') || 'any company'}${intent.deep ? ' · DEEP SEARCH' : ''}`, 'ok', 'parse');
+
+    // LinkedIn's official alumni tool (filters by graduation year) - real batch confirmation, opened by the user while logged in
+    const schoolP = (async () => {
+      let s = db.prepare('SELECT * FROM schools WHERE lower(college)=lower(?)').get(intent.college);
+      if (!s) { try { s = await findSchool(intent.college); } catch { s = null; } if (s) db.prepare('INSERT OR REPLACE INTO schools VALUES (?,?,?)').run(intent.college, s.slug, s.url); }
+      if (!s) { step(`Note: no official LinkedIn page found for "${intent.college}" - check the spelling of the college name`, 'warn'); return; }
+      const min = intent.batches[0], max = intent.batches.at(-1);
+      const link = (kw) => `https://www.linkedin.com/school/${s.slug}/people/?${new URLSearchParams({ ...(min ? { educationStartYear: String(min - 4) } : {}), ...(max ? { educationEndYear: String(max) } : {}), ...(kw ? { keywords: kw } : {}) })}`;
+      send('school', { college: intent.college, url: s.url, links: (intent.companies.length ? intent.companies : [null]).map((c) => ({ company: c, url: link(c) })) });
+    })();
+    const found = new Set();
+    const cached = lakeQuery(intent, found).length;
+    step(`Checking data lake… ${cached} known alumni already match`, 'ok');
+
+    step('Discovering alumni from live sources…', 'run', 'discover');
+    const { live, items } = await discover(intent, (t, l) => step(t, l));
+    step(`Discovery finished: ${items.length} candidate(s)${live ? '' : ' (no live source reachable)'}`, 'ok', 'discover');
+
+    let created = 0;
+    for (const a of items) {
+      if (a.location) { const g = await geocode(a.location); if (g) Object.assign(a, g); }
+      const { id, isNew } = upsertAlumni(a); found.add(id);
+      db.prepare('UPDATE alumni SET evidence=COALESCE(?,evidence), batch_source=COALESCE(batch_source,?) WHERE id=?').run(a.evidence || null, a.batch_source || null, id);
+      if (isNew) created++;
+    }
+    step(`Data lake updated: +${created} new, ${items.length - created} refreshed`, 'ok');
+    const confirmed = applyRegister(intent.college);
+    if (confirmed) step(`College register: ${confirmed} record(s) batch-confirmed from the official alumni list`, 'ok');
+    await schoolP;
+
+    const todo = lakeQuery(intent, found).filter((r) => !r.email && !r.enriched && !/sample|register/.test(r.source || '')).slice(0, 12);
+    if (todo.length) {
+      step(`Email-finder agent: checking public sources (GitHub, web) for ${todo.length} profile(s)…`, 'run', 'enrich');
+      let found = 0;
+      for (const r of todo) {
+        const hit = await enrichEmail(r);
+        db.prepare('UPDATE alumni SET enriched=1, email=COALESCE(?,email), evidence=COALESCE(?,evidence) WHERE id=?')
+          .run(hit?.email ?? null, hit ? `${r.evidence || ''} | email via ${hit.via}` : null, r.id);
+        if (hit) { found++; logEvent('email_found', r.id, { via: hit.via }); }
+      }
+      step(`Email-finder: ${found} public email(s) found; others fall back to LinkedIn`, 'ok', 'enrich');
+    }
+
+
+    const rows = lakeQuery(intent, found);
+    let invites = 0;
+    for (const r of rows) if (!r.invited_at && r.status !== 'joined' && r.source !== 'sample') { const out = await autoInvite(r); if (out) invites++; }
+    // Sample records get invites recorded too so the whole loop is demonstrable, but nothing is emailed.
+    for (const r of rows.filter((x) => x.source === 'sample' && !x.invited_at)) {
+      db.prepare("UPDATE alumni SET invite_token=hex(randomblob(12)), invited_at=?, status='invited' WHERE id=?").run(new Date().toISOString(), r.id);
+    }
+    step(`Auto-invite agent: ${invites} invitation(s) queued/sent`, 'ok');
+
+    db.prepare('INSERT INTO searches(query,parsed,found,created_at) VALUES (?,?,?,?)').run(q, JSON.stringify(intent), rows.length, new Date().toISOString());
+    const final = db.prepare('SELECT * FROM alumni WHERE id IN (' + (rows.map(() => '?').join(',') || "''") + ')').all(...rows.map((r) => r.id)).map(pub);
+    send('results', final);
+  } catch (e) {
+    step(`Agent error: ${e.message}`, 'warn');
+  }
+  send('done', {}); res.end();
+});
+
+/** College admin uploads the OFFICIAL alumni register (CSV). This is the ground truth for batch years. */
+app.post('/api/register', express.text({ type: '*/*', limit: '5mb' }), async (req, res) => {
+  const college = String(req.query.college || '').trim();
+  if (!college) return res.status(400).json({ error: 'college required' });
+  const rows = parseCsv(String(req.body || ''));
+  if (!rows.length) return res.status(400).json({ error: 'CSV is empty' });
+  const col = (r, ...names) => { for (const n of names) { const k = Object.keys(r).find((x) => x.toLowerCase().replace(/[^a-z]/g, '') === n); if (k && r[k]) return r[k].trim(); } return null; };
+  let added = 0, skipped = 0;
+  for (const r of rows) {
+    const name = col(r, 'name', 'fullname', 'studentname'); const batch = +(col(r, 'batch', 'year', 'graduationyear', 'passingyear', 'passoutyear') || 0);
+    if (!name || !batch) { skipped++; continue; }
+    const email = col(r, 'email', 'emailid', 'mail'), linkedin = col(r, 'linkedin', 'linkedinurl', 'linkedinprofile'), program = col(r, 'program', 'course', 'degree', 'branch');
+    db.prepare('INSERT OR REPLACE INTO register VALUES (?,?,?,?,?,?,?)').run(college, normName(name), name, batch, email, linkedin, program);
+    // Only create a lake record if this person isn't already there (otherwise applyRegister just confirms the existing one)
+    const exists = db.prepare('SELECT id,name FROM alumni WHERE lower(college)=lower(?)').all(college).some((x) => normName(x.name) === normName(name));
+    if (!exists) upsertAlumni({ name, college, batch, email, linkedin, source: 'register', company: col(r, 'company', 'currentcompany', 'employer'), location: col(r, 'location', 'city') });
+    added++;
+  }
+  const matched = applyRegister(college);
+  logEvent('register_import', null, { college, added });
+  res.json({ ok: true, added, skipped, matched });
+});
+
+function parseCsv(text) {
+  const lines = []; let row = [], cur = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"' && text[i + 1] === '"') { cur += '"'; i++; } else if (c === '"') q = false; else cur += c; }
+    else if (c === '"') q = true; else if (c === ',') { row.push(cur); cur = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cur); lines.push(row); row = []; cur = ''; }
+    else cur += c;
+  }
+  if (cur || row.length) { row.push(cur); lines.push(row); }
+  const [head, ...body] = lines.filter((l) => l.some((x) => x.trim()));
+  return head ? body.map((l) => Object.fromEntries(head.map((h, i) => [h.trim(), l[i] ?? '']))) : [];
+}
+
+app.get('/api/lake', (_req, res) => {
+  const total = (sql) => db.prepare(sql).get().n;
+  res.json({
+    stats: {
+      alumni: total('SELECT COUNT(*) n FROM alumni'), invited: total("SELECT COUNT(*) n FROM alumni WHERE status='invited'"),
+      joined: total("SELECT COUNT(*) n FROM alumni WHERE status='joined'"), searches: total('SELECT COUNT(*) n FROM searches'),
+      withEmail: total('SELECT COUNT(*) n FROM alumni WHERE email IS NOT NULL'),
+      register: total('SELECT COUNT(*) n FROM register'), batchConfirmed: total("SELECT COUNT(*) n FROM alumni WHERE batch_source='register' OR verified=1"),
+    },
+    byCompany: db.prepare('SELECT company label, COUNT(*) n FROM alumni GROUP BY company ORDER BY n DESC').all(),
+    byBatch: db.prepare('SELECT batch label, COUNT(*) n FROM alumni WHERE batch IS NOT NULL GROUP BY batch ORDER BY batch').all(),
+    alumni: db.prepare('SELECT * FROM alumni ORDER BY last_seen DESC').all().map(pub),
+    events: db.prepare('SELECT e.*, a.name FROM events e LEFT JOIN alumni a ON a.id=e.alumni_id ORDER BY e.id DESC LIMIT 25').all(),
+    outbox: db.prepare('SELECT o.*, a.name FROM outbox o LEFT JOIN alumni a ON a.id=o.alumni_id ORDER BY o.id DESC LIMIT 25').all(),
+  });
+});
+
+app.get('/api/join/:token', (req, res) => {
+  const a = db.prepare('SELECT name,company,title,location,batch,college,email,linkedin,status FROM alumni WHERE invite_token=?').get(req.params.token);
+  a ? res.json(a) : res.status(404).json({ error: 'Invalid or expired invite' });
+});
+
+/** Alumnus accepts → self-reported, verified data is written back to the lake. */
+app.post('/api/join/:token', async (req, res) => {
+  const a = db.prepare('SELECT * FROM alumni WHERE invite_token=?').get(req.params.token);
+  if (!a) return res.status(404).json({ error: 'Invalid or expired invite' });
+  const b = req.body || {};
+  if (!b.consent) return res.status(400).json({ error: 'Consent is required' });
+  const g = b.location ? await geocode(b.location) : null;
+  db.prepare(`UPDATE alumni SET name=?, company=?, title=?, location=?, lat=COALESCE(?,lat), lng=COALESCE(?,lng), batch=?, email=?, linkedin=?,
+    verified=1, status='joined', joined_at=? WHERE id=?`).run(
+    b.name || a.name, b.company || a.company, b.title || a.title, b.location || a.location, g?.lat ?? null, g?.lng ?? null,
+    +b.batch || a.batch, b.email || a.email, b.linkedin || a.linkedin, new Date().toISOString(), a.id);
+  logEvent('joined', a.id, { repopulated: true });
+  res.json({ ok: true });
+});
+
+/** Open (no-invite) signup so any alumnus can self-register. */
+app.post('/api/signup', async (req, res) => {
+  const b = req.body || {};
+  if (!b.name || !b.consent) return res.status(400).json({ error: 'Name and consent required' });
+  const g = b.location ? await geocode(b.location) : null;
+  const rec = { name: b.name, company: b.company, title: b.title, location: b.location, batch: +b.batch || null, college: 'Universal AI University',
+    email: b.email, linkedin: b.linkedin || null, source: 'self', ...(g || {}) };
+  const { id } = upsertAlumni(rec);
+  db.prepare("UPDATE alumni SET verified=1,status='joined',joined_at=? WHERE id=?").run(new Date().toISOString(), id);
+  logEvent('joined', id, { self: true });
+  res.json({ ok: true });
+});
+
+app.get('/api/export.csv', (_req, res) => {
+  const rows = db.prepare('SELECT name,company,title,location,batch,batch_source,email,linkedin,status,source,verified,evidence FROM alumni').all();
+  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  res.type('text/csv').send([Object.keys(rows[0] || { name: 1 }).join(','), ...rows.map((r) => Object.values(r).map(esc).join(','))].join('\n'));
+});
+
+const port = process.env.PORT || 3000;
+app.get('/healthz', (_req, res) => res.send('ok'));
+app.listen(port, '0.0.0.0', () => console.log(`Alumni Agent running → http://localhost:${port}`));

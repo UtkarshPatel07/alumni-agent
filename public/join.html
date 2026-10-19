@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Join the alumni network</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Orbitron:wght@700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css"></head>
+<body><div class="bg"></div>
+<header class="nav"><a class="logo" href="/" style="color:inherit;text-decoration:none"><span class="dot"></span>Alumni<b>Agent</b></a></header>
+<div class="joinwrap card">
+  <div class="eyebrow">Alumni network</div>
+  <h1 style="font-size:34px;margin:16px 0 6px" id="title">Join your alumni network</h1>
+  <p class="sub" style="margin:0 0 20px;font-size:15px" id="sub">Students are looking for people like you. You decide what's shared.</p>
+  <form id="f" class="form">
+    <div class="two"><label>Full name<input name="name" required></label><label>Batch (graduation year)<input name="batch" type="number" min="2000" max="2030" placeholder="2023"></label></div>
+    <div class="two"><label>Company<input name="company" placeholder="Google"></label><label>Role<input name="title" placeholder="Software Engineer"></label></div>
+    <label>Location<input name="location" placeholder="Bengaluru, India"></label>
+    <div class="two"><label>Email<input name="email" type="email"></label><label>LinkedIn URL<input name="linkedin" placeholder="https://linkedin.com/in/…"></label></div>
+    <label class="check"><input type="checkbox" name="consent" style="margin-top:3px"> I agree that my details above may be shown to students of my college in the alumni directory. I can ask for removal anytime.</label>
+    <button class="go">Join network →</button>
+  </form>
+  <div id="msg"></div>
+</div>
+<script>
+const t = new URLSearchParams(location.search).get('t'); const f = document.getElementById('f'), msg = document.getElementById('msg');
+const show = (c, m) => msg.innerHTML = `<div class="msg ${c}">${m}</div>`;
+if (t) fetch('/api/join/' + t).then((r) => r.ok ? r.json() : Promise.reject()).then((a) => {
+  document.getElementById('title').textContent = `Welcome, ${a.name.split(' ')[0]}!`;
+  document.getElementById('sub').textContent = `We found you at ${a.company || 'your company'}. Confirm your details so students can reach you.`;
+  for (const k of ['name', 'batch', 'company', 'title', 'location', 'email', 'linkedin']) if (a[k] && f[k]) f[k].value = a[k];
+}).catch(() => show('err', 'This invite link is invalid or expired.'));
+f.onsubmit = async (e) => {
+  e.preventDefault();
+  const body = Object.fromEntries(new FormData(f)); body.consent = f.consent.checked;
+  const r = await fetch(t ? '/api/join/' + t : '/api/signup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const j = await r.json();
+  r.ok ? (f.style.display = 'none', show('ok', '🎉 You\'re in! Your verified profile has been added to the alumni data lake.')) : show('err', j.error);
+};
+</script></body></html>
