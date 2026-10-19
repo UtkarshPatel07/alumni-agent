@@ -84,6 +84,15 @@ function render(all, keepFilters) {
   setTimeout(() => { map.invalidateSize(); pts.length && map.fitBounds(pts, { padding: [40, 40], maxZoom: 6 }); }, 80);
 }
 
+document.addEventListener('click', (e) => {
+  const chip = e.target.closest('.chips button');
+  if (!chip) return;
+  const query = chip.dataset.q;
+  if (!query) return;
+  $('#q').value = query;
+  $('#form').requestSubmit();
+});
+
 $('#form').onsubmit = (e) => {
   e.preventDefault();
   const college = $('#fCollege').value.trim(), from = $('#fFrom').value, to = $('#fTo').value, cos = $('#fCos').value.trim(), deep = $('#fDeep').checked;

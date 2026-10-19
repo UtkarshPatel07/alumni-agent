@@ -6,7 +6,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@500;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="styles.css?v=12">
+<link rel="stylesheet" href="styles.css?v=14">
 </head>
 <body>
 <div class="bg"></div>
@@ -22,16 +22,32 @@
 <main>
 <section id="search" class="view active">
   <div class="hero">
-    <div class="eyebrow">AI-native · Agentic · Live data</div>
-    <h1>Find any alumni.<br><span class="grad">Just ask.</span></h1>
-    <p class="sub">Type or speak. An autonomous agent discovers alumni, maps them, and invites them to join — filling your data lake every time you search.</p>
+    <div class="hero-glow"></div>
+    <div class="eyebrow"><span class="pulse-dot"></span> Autonomous Alumni Intelligence · Live Data Lake</div>
+    <h1>Discover alumni worldwide.<br><span class="grad">Any college. Any batch. Any company.</span></h1>
+    <p class="sub">Speak or type in plain English. An autonomous AI agent discovers alumni across public web platforms, verifies graduation years, maps locations, and drafts outreach — filling your live data lake every time you search.</p>
+    
+    <div class="hero-badges">
+      <span class="hbadge"><i class="hicon">🌐</i> Multi-Source Discovery</span>
+      <span class="hbadge"><i class="hicon">🎯</i> Verifiable Batch Evidence</span>
+      <span class="hbadge"><i class="hicon">📊</i> Real-Time Data Lake</span>
+      <span class="hbadge"><i class="hicon">✉️</i> 1-Click LinkedIn Outreach</span>
+    </div>
+
     <form id="form" class="searchbar">
-      <textarea id="q" rows="2" placeholder="e.g. Find alumni of Galgotias University from 2020 to 2026 who work at Microsoft or Google. Share location, email or LinkedIn."></textarea>
+      <textarea id="q" rows="2" placeholder="e.g. Find alumni of Galgotias University from 2020 to 2024 who work at Microsoft or Google. Share location, email or LinkedIn."></textarea>
       <div class="actions">
         <button type="button" id="mic" class="icon" title="Speak your query" aria-label="Voice input">🎙</button>
         <button class="go" id="go">Run agent →</button>
       </div>
     </form>
+    <div class="chips">
+      <span class="chips-label">Popular searches:</span>
+      <button type="button" data-q="Find alumni from University of Mumbai batch 2023 working at Tata Consultancy Services">🏛 Mumbai Univ '23 · TCS</button>
+      <button type="button" data-q="Find alumni from Galgotias University from 2020 to 2024 working at Google or Microsoft">💻 Galgotias '20-'24 · Big Tech</button>
+      <button type="button" data-q="Find alumni from Universal AI University batch 2024">🤖 Universal AI Univ '24</button>
+      <button type="button" data-q="Find alumni from Symbiosis International University batch 2021 to 2023">🎓 Symbiosis '21-'23</button>
+    </div>
     <div class="adv">
       <input id="fCollege" placeholder="College (optional)">
       <input id="fFrom" type="number" min="1980" max="2035" placeholder="Batch from">
@@ -99,6 +115,6 @@
 </main>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="app.js?v=12"></script>
+<script src="app.js?v=14"></script>
 </body>
 </html>
