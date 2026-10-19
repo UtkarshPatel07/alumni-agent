@@ -77,9 +77,16 @@ h3{margin:0 0 12px;font:600 14px Inter;color:var(--mut);text-transform:uppercase
 .tag.g{background:rgba(52,211,153,.15);color:var(--ok)}.tag.y{background:rgba(251,191,36,.15);color:var(--warn)}.tag.p{background:rgba(124,92,255,.2);color:#cdbfff}
 .muted{color:var(--mut);text-transform:none;letter-spacing:0;font-weight:400}
 .lakehead h2{font:700 30px Orbitron;margin:40px 0 4px}.lakehead p{color:var(--mut);margin:0 0 20px}
-.bars div.row{display:grid;grid-template-columns:90px 1fr 28px;gap:8px;align-items:center;font-size:13px;margin:7px 0}
+.bars,.events{max-height:240px;overflow-y:auto;overflow-x:hidden;padding-right:6px}
+.bars::-webkit-scrollbar,.events::-webkit-scrollbar,.scroll::-webkit-scrollbar,#steps::-webkit-scrollbar{width:6px;height:6px}
+.bars::-webkit-scrollbar-track,.events::-webkit-scrollbar-track,.scroll::-webkit-scrollbar-track,#steps::-webkit-scrollbar-track{background:rgba(255,255,255,.03);border-radius:99px}
+.bars::-webkit-scrollbar-thumb,.events::-webkit-scrollbar-thumb,.scroll::-webkit-scrollbar-thumb,#steps::-webkit-scrollbar-thumb{background:rgba(124,92,255,.35);border-radius:99px}
+.bars::-webkit-scrollbar-thumb:hover,.events::-webkit-scrollbar-thumb:hover,.scroll::-webkit-scrollbar-thumb:hover,#steps::-webkit-scrollbar-thumb:hover{background:rgba(124,92,255,.6)}
+.bars div.row{display:grid;grid-template-columns:110px 1fr 28px;gap:8px;align-items:center;font-size:13px;margin:7px 0}
+.bars div.row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bar{height:8px;border-radius:9px;background:linear-gradient(90deg,var(--a),var(--b))}
-.events{list-style:none;padding:0;margin:0;font-size:13px;max-height:210px;overflow:auto}.events li{padding:6px 0;border-bottom:1px solid var(--line)}
+.events{list-style:none;padding:0;margin:0;font-size:13px}
+.events li{padding:6px 0;border-bottom:1px solid var(--line)}
 .tablecard{margin-top:16px}.scroll{overflow:auto;max-height:420px}
 table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap}th{color:var(--mut);font-weight:500;position:sticky;top:0;background:#0c1122}
 .empty{text-align:center;color:var(--mut);padding:40px;grid-column:1/-1}
