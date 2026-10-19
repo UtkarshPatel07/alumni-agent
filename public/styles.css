@@ -119,3 +119,8 @@ select option:checked,select option:hover{background:#7c5cff;color:#fff}
 .go.sm{height:auto;padding:8px 14px;font-size:13px;text-decoration:none;display:inline-block;border-radius:10px}.go.wa{background:#1fa855}
 .libtn{display:flex;align-items:center;justify-content:center;gap:10px;background:#0a66c2;color:#fff;text-decoration:none;padding:12px;border-radius:12px;font-weight:600}
 .libtn span{background:#fff;color:#0a66c2;font-weight:800;border-radius:4px;padding:0 5px;font-family:Arial}
+
+.dlbar{display:grid;grid-template-columns:2fr .8fr .8fr 1.2fr auto auto;gap:8px;align-items:center}
+.dlbar select,.dlbar input:not([type=checkbox]){background:#0f1529;border:1px solid var(--line);border-radius:10px;padding:9px 10px;color:var(--tx);font:13px Inter;min-width:0}
+.dlbar .ftoggle{margin-left:0}
+@media(max-width:900px){.dlbar{grid-template-columns:1fr 1fr}}

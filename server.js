@@ -257,10 +257,33 @@ app.post('/api/signup', async (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/export.csv', (_req, res) => {
-  const rows = db.prepare('SELECT name,company,title,location,batch,batch_source,email,linkedin,status,source,verified,evidence FROM alumni').all();
+/** Colleges in the data lake (for the download picker) */
+app.get('/api/colleges', (_req, res) => {
+  res.json(db.prepare("SELECT college, COUNT(*) n, SUM(batch IS NOT NULL) withBatch FROM alumni WHERE college IS NOT NULL AND source != 'sample' GROUP BY lower(college) ORDER BY n DESC").all());
+});
+
+/** CSV download, filtered by college / batch range / company / confirmed batch only. Opens cleanly in Excel (UTF-8 BOM). */
+app.get('/api/export.csv', (req, res) => {
+  const where = ["source != 'sample'"], args = [];
+  if (req.query.college) { where.push('lower(college)=lower(?)'); args.push(String(req.query.college)); }
+  const fy = +req.query.from || null, ty = +req.query.to || null;
+  if (fy || ty) {
+    const cond = [fy ? 'batch >= ?' : '', ty ? 'batch <= ?' : ''].filter(Boolean).join(' AND ');
+    where.push(req.query.confirmed === '1' ? `(${cond})` : `(batch IS NULL OR (${cond}))`); // unknown-batch alumni kept unless "confirmed only"
+    if (fy) args.push(fy); if (ty) args.push(ty);
+  }
+  if (req.query.confirmed === '1') where.push('batch IS NOT NULL');
+  if (req.query.company) { where.push("lower(company) LIKE '%' || lower(?) || '%'"); args.push(String(req.query.company)); }
+  if (req.query.ids) { const ids = String(req.query.ids).split(',').filter(Boolean).slice(0, 2000); where.push(`id IN (${ids.map(() => '?').join(',')})`); args.push(...ids); }
+  const rows = db.prepare(`SELECT name, college, batch, CASE WHEN batch IS NULL THEN 'not public' WHEN batch_source='register' THEN 'college register' WHEN verified=1 THEN 'self-confirmed' WHEN batch_source='news' THEN 'placement news' ELSE 'from profile' END AS batch_proof,
+      company, title, location, email, linkedin, status AS invite_status, source, evidence AS why_matched, last_seen
+      FROM alumni WHERE ${where.join(' AND ')} ORDER BY college, batch DESC, name`).all(...args);
+  const cols = ['name', 'college', 'batch', 'batch_proof', 'company', 'title', 'location', 'email', 'linkedin', 'invite_status', 'source', 'why_matched', 'last_seen'];
   const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  res.type('text/csv').send([Object.keys(rows[0] || { name: 1 }).join(','), ...rows.map((r) => Object.values(r).map(esc).join(','))].join('\n'));
+  const slug = (req.query.college || 'all-colleges').toString().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const yrs = fy || ty ? `-${fy || ''}-${ty || ''}` : '';
+  res.set('content-disposition', `attachment; filename="alumni-${slug}${yrs}.csv"`);
+  res.type('text/csv; charset=utf-8').send('\ufeff' + [cols.join(','), ...rows.map((r) => cols.map((c) => esc(r[c])).join(','))].join('\r\n'));
 });
 
 const port = process.env.PORT || 3000;

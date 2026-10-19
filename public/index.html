@@ -6,7 +6,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@500;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="styles.css?v=11">
+<link rel="stylesheet" href="styles.css?v=12">
 </head>
 <body>
 <div class="bg"></div>
@@ -81,12 +81,24 @@
     <div class="regrow"><input id="regCollege" placeholder="College name exactly as you search it, e.g. Galgotias University"><input id="regFile" type="file" accept=".csv,text/csv"><button class="go" id="regBtn" type="button">Import</button></div>
     <div id="regMsg"></div>
   </div>
+  <div class="card tablecard">
+    <h3>Download alumni (CSV)</h3>
+    <div class="dlbar">
+      <select id="dlCollege"><option value="">All colleges</option></select>
+      <input id="dlFrom" type="number" placeholder="Batch from" min="1980" max="2035">
+      <input id="dlTo" type="number" placeholder="Batch to" min="1980" max="2035">
+      <input id="dlCo" placeholder="Company (optional)">
+      <label class="ftoggle"><input type="checkbox" id="dlConf"> Confirmed batch only</label>
+      <button class="go sm" id="dlBtn" type="button">⬇ Download CSV</button>
+    </div>
+    <div class="muted" id="dlInfo" style="font-size:12.5px;margin-top:8px"></div>
+  </div>
   <div class="card tablecard"><h3>All records</h3><div class="scroll"><table id="table"></table></div></div>
   <div class="card tablecard"><h3>Invite outbox <span class="muted">(auto-invite agent)</span></h3><div id="outbox"></div></div>
 </section>
 </main>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="app.js?v=11"></script>
+<script src="app.js?v=12"></script>
 </body>
 </html>

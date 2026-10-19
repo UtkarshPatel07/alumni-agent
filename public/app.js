@@ -6,7 +6,7 @@ let map, layer, lastResults = [], lastIntent = {}, currentES = null, fYear = 'al
 document.querySelectorAll('.tab[data-tab]').forEach((b) => b.onclick = () => {
   document.querySelectorAll('.tab[data-tab]').forEach((x) => x.classList.toggle('active', x === b));
   document.querySelectorAll('.view').forEach((v) => v.classList.toggle('active', v.id === b.dataset.tab));
-  if (b.dataset.tab === 'lake') { loadLake(); loadCampaign(); } else map?.invalidateSize();
+  if (b.dataset.tab === 'lake') { loadLake(); loadCampaign(); loadColleges(); } else map?.invalidateSize();
 });
 
 // Voice input (Web Speech API)
@@ -116,7 +116,12 @@ $('#form').onsubmit = (e) => {
   es.onerror = () => { es.close(); $('#go').disabled = false; $('#go').textContent = 'Run agent →'; };
 };
 
-$('#csv').onclick = () => { location.href = '/api/export.csv'; };
+$('#csv').onclick = () => {
+  const shown = applyFilters(lastResults);
+  if (!shown.length) return toast('Nothing to export: no results match the current filters.');
+  const p = new URLSearchParams({ ids: shown.map((a) => a.id).join(','), college: lastIntent.college || '' });
+  location.href = '/api/export.csv?' + p;
+};
 
 async function refreshBadge() { try { $('#lakeBadge').textContent = (await (await fetch('/api/lake')).json()).stats.alumni; } catch {} }
 
@@ -172,6 +177,24 @@ async function loadCampaign() {
   $('#campStatus').innerHTML = `Email auto-send: <b>${c.smtp ? 'ON' : 'OFF (add SMTP in .env)'}</b> · Sign in with LinkedIn on join page: <b>${c.linkedinLogin ? 'ON' : 'OFF (add LINKEDIN_CLIENT_ID/SECRET)'}</b>`;
 }
 $('#campCollege').onchange = loadCampaign;
+
+// ---------------- CSV download by college ----------------
+async function loadColleges() {
+  const list = await (await fetch('/api/colleges')).json();
+  const sel = $('#dlCollege'), keep = sel.value;
+  sel.innerHTML = '<option value="">All colleges</option>' + list.map((c) => `<option value="${esc(c.college)}">${esc(c.college)} (${c.n} alumni, ${c.withBatch} with batch)</option>`).join('');
+  if (keep) sel.value = keep; else if (lastIntent.college && list.some((c) => c.college.toLowerCase() === lastIntent.college.toLowerCase())) sel.value = list.find((c) => c.college.toLowerCase() === lastIntent.college.toLowerCase()).college;
+  $('#dlInfo').textContent = list.length ? 'Columns: name, college, batch, batch proof, company, title, location, email, LinkedIn, invite status, source, why matched. Opens directly in Excel / Google Sheets.' : 'The data lake is empty: run a search first.';
+}
+$('#dlBtn').onclick = () => {
+  const p = new URLSearchParams();
+  if ($('#dlCollege').value) p.set('college', $('#dlCollege').value);
+  if ($('#dlFrom').value) p.set('from', $('#dlFrom').value);
+  if ($('#dlTo').value) p.set('to', $('#dlTo').value);
+  if ($('#dlCo').value.trim()) p.set('company', $('#dlCo').value.trim());
+  if ($('#dlConf').checked) p.set('confirmed', '1');
+  location.href = '/api/export.csv?' + p;
+};
 
 $('#regBtn').onclick = async () => {
   const college = $('#regCollege').value.trim(), f = $('#regFile').files[0];
