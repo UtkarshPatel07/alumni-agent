@@ -34,6 +34,13 @@ textarea::placeholder{color:#64748b}
 .go{height:46px;padding:0 24px;border:0;border-radius:14px;background:linear-gradient(135deg,#7c5cff,#2563eb);color:#fff;font:600 14.5px Inter;cursor:pointer;box-shadow:0 6px 20px rgba(124,92,255,.35);transition:.2s;display:inline-flex;align-items:center;gap:6px}
 .go:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(124,92,255,.5)}
 .go:disabled{opacity:.6;cursor:wait;transform:none}
+.vlang{height:46px;padding:0 12px;border-radius:14px;border:1px solid rgba(124,92,255,.35);background:rgba(124,92,255,.1);color:#c7d2fe;font:600 13px Inter;cursor:pointer;transition:.2s;display:inline-flex;align-items:center;gap:4px}
+.vlang:hover{background:rgba(124,92,255,.25);color:#fff;border-color:#a78bfa}
+.voice-status{max-width:860px;margin:12px auto 0;background:rgba(124,92,255,.14);border:1px solid rgba(124,92,255,.4);border-radius:14px;padding:10px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13.5px;color:#e0e7ff;animation:in .3s}
+.voice-status.hidden{display:none}
+.voice-wave{width:11px;height:11px;border-radius:50%;background:#ef4444;box-shadow:0 0 14px #ef4444;animation:pulse 1s infinite;flex:none}
+.vstop-btn{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;font:600 12.5px Inter;padding:6px 14px;border-radius:10px;cursor:pointer;transition:.2s}
+.vstop-btn:hover{background:#34d399;color:#042f1a;border-color:#34d399}
 .chips{margin-top:14px;display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap;font-size:12.5px}
 .chips-label{color:#64748b;font-weight:500;margin-right:4px}
 .chips button{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);color:#94a3b8;padding:6px 13px;border-radius:99px;cursor:pointer;font:500 12.5px Inter;transition:.2s}

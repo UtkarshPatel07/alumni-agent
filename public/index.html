@@ -6,7 +6,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@500;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="styles.css?v=14">
+<link rel="stylesheet" href="styles.css?v=15">
 </head>
 <body>
 <div class="bg"></div>
@@ -35,12 +35,18 @@
     </div>
 
     <form id="form" class="searchbar">
-      <textarea id="q" rows="2" placeholder="e.g. Find alumni of Galgotias University from 2020 to 2024 who work at Microsoft or Google. Share location, email or LinkedIn."></textarea>
+      <textarea id="q" rows="2" placeholder="e.g. Find alumni of Galgotias University from 2020 to 2024 who work at Microsoft or Google. (You can type or speak in English, Hindi or Hinglish)"></textarea>
       <div class="actions">
-        <button type="button" id="mic" class="icon" title="Speak your query" aria-label="Voice input">🎙</button>
+        <button type="button" id="voiceLang" class="vlang" title="Toggle language: English / Hinglish / Hindi">🌐 EN</button>
+        <button type="button" id="mic" class="icon" title="Speak your query (English / Hindi / Hinglish)" aria-label="Voice input">🎙</button>
         <button class="go" id="go">Run agent →</button>
       </div>
     </form>
+    <div id="voiceStatus" class="voice-status hidden">
+      <span class="voice-wave"></span>
+      <span id="voiceStatusText">Listening in English / Hinglish... speak now</span>
+      <button type="button" id="voiceStop" class="vstop-btn">Done Speaking ✓</button>
+    </div>
     <div class="chips">
       <span class="chips-label">Popular searches:</span>
       <button type="button" data-q="Find alumni from University of Mumbai batch 2023 working at Tata Consultancy Services">🏛 Mumbai Univ '23 · TCS</button>
@@ -115,6 +121,6 @@
 </main>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="app.js?v=14"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>

@@ -9,16 +9,121 @@ document.querySelectorAll('.tab[data-tab]').forEach((b) => b.onclick = () => {
   if (b.dataset.tab === 'lake') { loadLake(); loadCampaign(); loadColleges(); } else map?.invalidateSize();
 });
 
-// Voice input (Web Speech API)
+// Voice input (Multi-language Web Speech API: English, Hindi, Hinglish)
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-if (!SR) $('#mic').style.display = 'none';
-else {
-  const rec = new SR(); rec.lang = 'en-IN'; rec.interimResults = true; rec.continuous = false;
+let voiceLang = 'en-IN'; // default to Indian English / Hinglish
+let silenceTimer = null;
+
+if (!SR) {
+  if ($('#mic')) $('#mic').style.display = 'none';
+  if ($('#voiceLang')) $('#voiceLang').style.display = 'none';
+} else {
+  const rec = new SR();
+  rec.lang = voiceLang;
+  rec.interimResults = true;
+  rec.continuous = true; // Crucial: Don't stop abruptly while speaking!
   let on = false;
-  $('#mic').onclick = () => { on ? rec.stop() : rec.start(); };
-  rec.onstart = () => { on = true; $('#mic').classList.add('rec'); };
-  rec.onend = () => { on = false; $('#mic').classList.remove('rec'); if ($('#q').value.trim()) $('#form').requestSubmit(); };
-  rec.onresult = (e) => { $('#q').value = [...e.results].map((r) => r[0].transcript).join(' '); };
+
+  const updateVoiceLangUI = () => {
+    rec.lang = voiceLang;
+    if ($('#voiceLang')) {
+      $('#voiceLang').textContent = voiceLang === 'hi-IN' ? '🇮🇳 हिं' : '🌐 EN';
+      $('#voiceLang').title = voiceLang === 'hi-IN' ? 'Voice Language: Hindi / Hinglish (click for English)' : 'Voice Language: English / Hinglish (click for Hindi)';
+    }
+  };
+
+  if ($('#voiceLang')) {
+    $('#voiceLang').onclick = (e) => {
+      e.preventDefault();
+      voiceLang = voiceLang === 'en-IN' ? 'hi-IN' : 'en-IN';
+      updateVoiceLangUI();
+      toast(`Voice set to: <b>${voiceLang === 'hi-IN' ? 'Hindi / Hinglish (हिन्दी)' : 'English / Hinglish (en-IN)'}</b>`, 3000);
+    };
+  }
+
+  const stopListening = (autoSubmit = true) => {
+    if (!on) return;
+    try { rec.stop(); } catch {}
+    on = false;
+    $('#mic')?.classList.remove('rec');
+    $('#voiceStatus')?.classList.add('hidden');
+    clearTimeout(silenceTimer);
+    if (autoSubmit && $('#q')?.value.trim()) {
+      $('#form')?.requestSubmit();
+    }
+  };
+
+  const startListening = () => {
+    if (on) { stopListening(true); return; }
+    try {
+      rec.lang = voiceLang;
+      rec.start();
+      on = true;
+      $('#mic')?.classList.add('rec');
+      $('#voiceStatus')?.classList.remove('hidden');
+      const txt = $('#voiceStatusText');
+      if (txt) txt.textContent = `Listening in ${voiceLang === 'hi-IN' ? 'Hindi / Hinglish (बोलिए...)' : 'English / Hinglish'}... speak now`;
+    } catch (err) {
+      console.warn('Speech start error:', err);
+      try { rec.stop(); } catch {}
+      setTimeout(() => { try { rec.start(); on = true; $('#mic')?.classList.add('rec'); } catch {} }, 200);
+    }
+  };
+
+  if ($('#mic')) {
+    $('#mic').onclick = (e) => {
+      e.preventDefault();
+      on ? stopListening(true) : startListening();
+    };
+  }
+
+  if ($('#voiceStop')) {
+    $('#voiceStop').onclick = (e) => {
+      e.preventDefault();
+      stopListening(true);
+    };
+  }
+
+  rec.onstart = () => {
+    on = true;
+    $('#mic')?.classList.add('rec');
+    $('#voiceStatus')?.classList.remove('hidden');
+  };
+
+  rec.onresult = (e) => {
+    clearTimeout(silenceTimer);
+    const transcript = [...e.results].map((r) => r[0].transcript).join(' ').trim();
+    if (transcript) {
+      $('#q').value = transcript;
+    }
+    // Auto-submit after 2.5s pause once text has been spoken
+    silenceTimer = setTimeout(() => {
+      if (on && $('#q')?.value.trim()) {
+        stopListening(true);
+      }
+    }, 2500);
+  };
+
+  rec.onerror = (e) => {
+    console.warn('SpeechRecognition error:', e.error);
+    if (e.error === 'no-speech') return; // Ignore brief silence
+    stopListening(false);
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed' || e.error === 'network') {
+      const isBrave = (navigator.brave && typeof navigator.brave.isBrave === 'function') || /Brave/i.test(navigator.userAgent);
+      if (isBrave) {
+        toast('<b>Microphone blocked by Brave browser</b><br>In Brave: Open <code>brave://settings/privacy</code> → Turn ON <b>"Use Google services for push messaging and speech recognition"</b>.<br>You can also type your query in English, Hindi, or Hinglish!', 12000);
+      } else {
+        toast(`<b>Microphone error (${e.error})</b>: Please allow mic permissions in your browser or type your query in English, Hindi, or Hinglish.`, 8000);
+      }
+    }
+  };
+
+  rec.onend = () => {
+    if (on) {
+      if ($('#q')?.value.trim()) stopListening(true);
+      else stopListening(false);
+    }
+  };
 }
 
 const palette = ['#7c5cff', '#22d3ee', '#f472b6', '#34d399', '#fb923c', '#60a5fa'];
