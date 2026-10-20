@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <radialGradient id="bgGrad" cx="50%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#151b36"/>
+      <stop offset="55%" stop-color="#090d1c"/>
+      <stop offset="100%" stop-color="#04060d"/>
+    </radialGradient>
+
+    <!-- Neon Rim Gradient -->
+    <linearGradient id="rimGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#22d3ee"/>
+      <stop offset="45%" stop-color="#7c5cff"/>
+      <stop offset="100%" stop-color="#ec4899"/>
+    </linearGradient>
+
+    <!-- Cap Top Gradient -->
+    <linearGradient id="capGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="40%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#a855f7"/>
+    </linearGradient>
+
+    <!-- Cap Under Gradient -->
+    <linearGradient id="capUnder" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5"/>
+      <stop offset="100%" stop-color="#1e1b4b"/>
+    </linearGradient>
+
+    <!-- Gold Accent Gradient -->
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a"/>
+      <stop offset="50%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+
+    <!-- Glow Filter -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="14" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+    <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="22" result="blur"/>
+    </filter>
+  </defs>
+
+  <!-- Squircle Base for Mobile Icons -->
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#bgGrad)"/>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="none" stroke="url(#rimGrad)" stroke-width="4" stroke-opacity="0.45"/>
+
+  <!-- Ambient Backdrop Glow -->
+  <circle cx="256" cy="240" r="140" fill="#7c5cff" opacity="0.22" filter="url(#softGlow)"/>
+  <circle cx="256" cy="220" r="80" fill="#22d3ee" opacity="0.25" filter="url(#softGlow)"/>
+
+  <!-- Neural Constellation Network (Base of Alumni Network) -->
+  <g stroke="#38bdf8" stroke-width="2.5" stroke-opacity="0.35" stroke-dasharray="4,4">
+    <line x1="140" y1="360" x2="256" y2="400"/>
+    <line x1="372" y1="360" x2="256" y2="400"/>
+    <line x1="256" y1="400" x2="256" y2="330"/>
+    <line x1="140" y1="360" x2="200" y2="320"/>
+    <line x1="372" y1="360" x2="312" y2="320"/>
+  </g>
+
+  <!-- Network Nodes -->
+  <circle cx="140" cy="360" r="7" fill="#22d3ee" filter="url(#glow)"/>
+  <circle cx="372" cy="360" r="7" fill="#a855f7" filter="url(#glow)"/>
+  <circle cx="256" cy="400" r="9" fill="#38bdf8" filter="url(#glow)"/>
+
+  <!-- Graduation Cap Base (Under-Skull) -->
+  <path d="M 180 230 Q 256 265 332 230 L 332 265 Q 256 315 180 265 Z" fill="url(#capUnder)"/>
+  <path d="M 194 260 Q 256 295 318 260 L 318 285 Q 256 325 194 285 Z" fill="#1e1b4b" opacity="0.8"/>
+
+  <!-- Graduation Cap Mortarboard Diamond -->
+  <polygon points="256,120 420,205 256,275 92,205" fill="url(#capGrad)" filter="url(#glow)"/>
+  <polygon points="256,126 410,205 256,270 102,205" fill="#090d1c" opacity="0.25"/>
+
+  <!-- Cap Crown Button -->
+  <ellipse cx="256" cy="198" rx="14" ry="8" fill="url(#goldGrad)" filter="url(#glow)"/>
+
+  <!-- Hanging Tassel Ribbon & Ring -->
+  <path d="M 256 198 Q 360 215 382 270 Q 388 300 385 330" fill="none" stroke="url(#goldGrad)" stroke-width="4.5" stroke-linecap="round"/>
+  <!-- Tassel Brush -->
+  <polygon points="385,328 376,368 394,368" fill="url(#goldGrad)" filter="url(#glow)"/>
+  <circle cx="385" cy="330" r="4.5" fill="#fff"/>
+
+  <!-- AI Pulse Light at Core -->
+  <circle cx="256" cy="225" r="5" fill="#fff" filter="url(#glow)"/>
+  <circle cx="256" cy="225" r="14" fill="none" stroke="#22d3ee" stroke-width="2" opacity="0.6"/>
+
+  <!-- Futuristic "A" Monogram Pedestal -->
+  <path d="M 226 350 L 256 300 L 286 350" fill="none" stroke="#67e8f9" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+  <line x1="236" y1="334" x2="276" y2="334" stroke="#67e8f9" stroke-width="3.5" stroke-linecap="round"/>
+</svg>
